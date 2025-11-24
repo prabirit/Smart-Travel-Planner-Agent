@@ -1,0 +1,7 @@
+mode,grams_co2_per_km
+car_gas,171
+car_electric,60
+bus,104
+train,41
+bike,8
+walk,0
