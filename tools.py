@@ -9,6 +9,10 @@ import certifi
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
+# Load environment variables from .env file
+#from dotenv import load_dotenv
+#load_dotenv()
+
 # Optional Gemini (Generative AI) import
 try:
     import google.generativeai as genai  # type: ignore
@@ -696,6 +700,162 @@ def search_hotels_realtime(city: str, limit: int = 5) -> str:
         return f"(Amadeus offers exception: {e})\n" + search_hotels(city, limit)
 
 
+# ==== Flight search via Amadeus Flight Offers Search API ====
+# Requires AMADEUS_API_KEY and AMADEUS_API_SECRET (same as hotel pricing).
+# Uses v1/reference-data/locations for airport/city code lookup and v2/shopping/flight-offers.
+
+def _get_iata_code(city: str) -> str | None:
+    """Lookup IATA airport/city code for the given city using Amadeus locations API.
+    
+    Returns the first matching IATA code or None if not found.
+    """
+    token = _amadeus_get_token()
+    if not token:
+        return None
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        resp = requests.get(
+            "https://test.api.amadeus.com/v1/reference-data/locations",
+            params={"keyword": city, "subType": "CITY,AIRPORT"},
+            headers=headers,
+            timeout=15,
+            verify=certifi.where(),
+        )
+        if resp.ok:
+            data = resp.json() or {}
+            results = data.get("data", [])
+            if results:
+                return results[0].get("iataCode")
+    except Exception as e:
+        print(f"[_get_iata_code] Error: {e}")
+    return None
+
+
+def search_flights(origin: str, destination: str, departure_date: str | None = None, limit: int = 5) -> str:
+    """Search for flight offers from origin to destination using Amadeus Flight Offers Search API.
+    
+    Args:
+        origin: Origin city name (e.g., "San Francisco")
+        destination: Destination city name (e.g., "New York")
+        departure_date: Departure date in YYYY-MM-DD format. If None, uses AMADEUS_CHECKIN_OFFSET_DAYS from env.
+        limit: Number of flight offers to return (default 5)
+    
+    Returns:
+        Formatted string with flight options sorted by price, or error/fallback message.
+    """
+    token = _amadeus_get_token()
+    if not token:
+        return "(Flight search unavailable: missing or invalid Amadeus credentials)"
+    
+    # Get IATA codes for origin and destination
+    origin_code = _get_iata_code(origin)
+    if not origin_code:
+        return f"Could not find airport code for origin '{origin}'."
+    destination_code = _get_iata_code(destination)
+    if not destination_code:
+        return f"Could not find airport code for destination '{destination}'."
+    
+    # Determine departure date
+    if departure_date is None:
+        from datetime import date, timedelta
+        try:
+            offset_days = int(os.getenv("AMADEUS_CHECKIN_OFFSET_DAYS", "7"))
+        except ValueError:
+            offset_days = 7
+        departure_date = (date.today() + timedelta(days=offset_days)).isoformat()
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    params = {
+        "originLocationCode": origin_code,
+        "destinationLocationCode": destination_code,
+        "departureDate": departure_date,
+        "adults": 1,
+        "currencyCode": "USD",
+        "max": limit,
+    }
+    
+    try:
+        resp = requests.get(
+            "https://test.api.amadeus.com/v2/shopping/flight-offers",
+            params=params,
+            headers=headers,
+            timeout=25,
+            verify=certifi.where(),
+        )
+        if not resp.ok:
+            return f"Flight search API error ({resp.status_code}): {resp.text[:200]}"
+        
+        data = resp.json() or {}
+        offers = data.get("data", [])
+        
+        if not offers:
+            return f"No flights found from {origin} ({origin_code}) to {destination} ({destination_code}) on {departure_date}."
+        
+        flights = []
+        for offer in offers[:limit]:
+            price = offer.get("price", {})
+            total = price.get("total")
+            currency = price.get("currency", "USD")
+            itineraries = offer.get("itineraries", [])
+            if not itineraries:
+                continue
+            # Use first itinerary (outbound)
+            segments = itineraries[0].get("segments", [])
+            if not segments:
+                continue
+            first_seg = segments[0]
+            last_seg = segments[-1]
+            dep_time = first_seg.get("departure", {}).get("at", "")
+            arr_time = last_seg.get("arrival", {}).get("at", "")
+            carrier = first_seg.get("carrierCode", "??")
+            flight_num = first_seg.get("number", "")
+            stops = len(segments) - 1
+            duration = itineraries[0].get("duration", "Unknown")
+            
+            try:
+                price_val = float(total) if total else None
+            except ValueError:
+                price_val = None
+            
+            if price_val is not None:
+                flights.append({
+                    "carrier": carrier,
+                    "flight_num": flight_num,
+                    "departure": dep_time,
+                    "arrival": arr_time,
+                    "duration": duration,
+                    "stops": stops,
+                    "price": price_val,
+                    "currency": currency,
+                })
+        
+        if not flights:
+            return f"No priced flight offers from {origin} to {destination} on {departure_date}."
+        
+        flights.sort(key=lambda f: f["price"])
+        lines = []
+        for f in flights:
+            stops_str = "direct" if f["stops"] == 0 else f"{f['stops']} stop(s)"
+            lines.append(
+                f"- {f['carrier']}{f['flight_num']} | {f['departure']} → {f['arrival']} | "
+                f"{f['duration']} | {stops_str} | {f['price']:.2f} {f['currency']}"
+            )
+        
+        disclaimer = (
+            "Flight prices from Amadeus Sandbox; may not reflect live market. "
+            "Verify availability and rates before booking."
+        )
+        return (
+            f"Flight options from {origin} ({origin_code}) to {destination} ({destination_code}) on {departure_date}:\n" +
+            "\n".join(lines) + "\n" + disclaimer
+        )
+    
+    except SSLError as e:
+        return f"(SSL error contacting Amadeus flights: {e})"
+    except Exception as e:
+        return f"(Flight search exception: {e})"
+
+
 # Test function to run the agent
 if __name__ == "__main__":
     #Test 1: Weather for the same city
@@ -708,8 +868,11 @@ if __name__ == "__main__":
     #om_result = fetch_air_quality_openmeteo("San Francisco")
     #print(om_result)
 
-    print("\n\n=== Test 3: Search Hotels in London ===")
-    om_result = search_hotels_realtime("London", limit=5)
-    print(om_result)
+    #print("\n\n=== Test 3: Search Hotels in London ===")
+    #om_result = search_hotels_realtime("London", limit=5)
+    #print(om_result)
 
+    print("\n\n=== Test 4: Search Flights from San Francisco to Las Vegas ===")
+    om_result = search_flights("San Francisco", "Las Vegas", "2025-12-01", limit=5)
+    print(om_result)
     #main()

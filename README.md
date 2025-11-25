@@ -6,7 +6,8 @@ Sustainable travel planning assistant providing:
 - Air quality (Open-Meteo rich or JSON fallback)
 - Transport emissions estimation from CSV factors
 - Hotel search (OSM heuristic) with star-based price range estimates
-- Real-time hotel pricing (optional Amadeus Self-Service API)
+- Real-time hotel pricing (Amadeus Self-Service API)
+- Flight search with real-time pricing (Amadeus Self-Service API)
 - Multi-day sustainable itinerary generation (Gemini)
 
 ## Features
@@ -25,6 +26,13 @@ Check-in dates are computed as `AMADEUS_CHECKIN_OFFSET_DAYS` (default 7) days fr
 - No hotel IDs or offers returned
 
 **Important**: Sandbox data may be synthetic, limited, or not reflect current market rates. Always verify rates before booking. For production-grade pricing or larger quotas, upgrade your Amadeus plan to Production environment.
+
+### Flight Search (Amadeus)
+If `AMADEUS_API_KEY` and `AMADEUS_API_SECRET` are set, the agent searches for flights using:
+1. **Airport code lookup**: Converts city names to IATA codes via `v1/reference-data/locations`.
+2. **Flight offers search**: Queries `v2/shopping/flight-offers` for available flights with pricing.
+
+Results include carrier, flight number, departure/arrival times, duration, stops, and total price sorted by cheapest first. Departure date defaults to `AMADEUS_CHECKIN_OFFSET_DAYS` from today (configurable via environment variable).
 
 ### Itinerary Generation
 Combines route distance (Google Directions if `GOOGLE_MAPS_API_KEY` available), weather, air quality, emissions, and preferred mode to generate a 3–5 day sustainable itinerary via Gemini (`GOOGLE_API_KEY`). Falls back to a static template if LLM unavailable.
@@ -62,6 +70,11 @@ python agent.py "San Francisco" "Los Angeles" --itinerary
 ```bash
 python tools.py
 ```
+6. Flight search (requires Amadeus credentials):
+```python
+from tools import search_flights
+print(search_flights("San Francisco", "New York", "2025-12-01"))
+```
 
 ## Real-Time Pricing Integration Steps
 1. Sign up at [Amadeus for Developers](https://developers.amadeus.com) and create an application in Test (Sandbox) mode.
@@ -71,7 +84,9 @@ python tools.py
 
 **Note**: The agent workflow uses:
 - `v1/reference-data/locations/hotels/by-geocode` (hotel discovery)
-- `v3/shopping/hotel-offers` (pricing with date parameters)
+- `v3/shopping/hotel-offers` (hotel pricing with date parameters)
+- `v1/reference-data/locations` (airport/city code lookup for flights)
+- `v2/shopping/flight-offers` (flight search and pricing)
 
 ## Disclaimers
 - Estimated emission factors are simplified and not lifecycle-complete.

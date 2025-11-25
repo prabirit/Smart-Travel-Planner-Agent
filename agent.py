@@ -33,6 +33,7 @@ try:  # package context
         geocode_city,
         search_hotels,
         search_hotels_realtime,
+        search_flights,
     )
 except Exception:  # script / non-package execution
     try:
@@ -44,6 +45,7 @@ except Exception:  # script / non-package execution
             geocode_city,
             search_hotels,
             search_hotels_realtime,
+            search_flights,
         )
     except Exception as import_err:
         raise RuntimeError(
@@ -175,6 +177,9 @@ def hotel_search_tool(city: str, limit: int = 5):
         return search_hotels_realtime(city, limit)
     return search_hotels(city, limit)
 
+def flight_search_tool(origin: str, destination: str, departure_date: str | None = None, limit: int = 5):
+    return search_flights(origin, destination, departure_date, limit)
+
 
 # New: itinerary tool wrapping ItineraryAgent
 def itinerary_tool(origin: str, destination: str, mode: str = "auto"):
@@ -200,14 +205,16 @@ itinerary_sub_agent = Agent(
 root_agent = Agent(
     model="gemini-2.5-flash",
     name="starter_sustainability_agent",
-    description="Answers sustainability questions: weather, air quality, transport emissions, current time, hotel search, and itinerary planning.",
+    description="Answers sustainability questions: weather, air quality, transport emissions, current time, hotel search, flight search, and itinerary planning.",
     instruction=(
         "You help with: 1) weather -> weather_tool(city); 2) air quality -> air_quality_tool(city); "
         "3) transport emissions -> transport_emissions_tool(mode, distance_km); 4) current time -> timer_tool(city); "
-        "5) itinerary planning -> itinerary_tool(origin, destination, mode); 6) hotel search -> hotel_search_tool(city, limit). "
-        "If a user asks for hotels or lodging, use hotel_search_tool. If a user asks for a trip plan, prefer itinerary_tool."
+        "5) itinerary planning -> itinerary_tool(origin, destination, mode); 6) hotel search -> hotel_search_tool(city, limit); "
+        "7) flight search -> flight_search_tool(origin, destination, departure_date, limit). "
+        "If a user asks for hotels or lodging, use hotel_search_tool. If a user asks for flights, use flight_search_tool. "
+        "If a user asks for a trip plan, prefer itinerary_tool which combines multiple tools."
     ),
-    tools=[weather_tool, air_quality_tool, transport_emissions_tool, timer_tool, itinerary_tool, hotel_search_tool],
+    tools=[weather_tool, air_quality_tool, transport_emissions_tool, timer_tool, itinerary_tool, hotel_search_tool, flight_search_tool],
     sub_agents=[itinerary_sub_agent],
 )
 
