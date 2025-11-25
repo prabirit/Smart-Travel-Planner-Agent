@@ -440,7 +440,9 @@ def search_hotels(city: str, limit: int = 5) -> str:
     );
     out body {limit};
     """
-    
+    print(f"[search_hotels] Querying Overpass API for hotels in {city}..")
+    #print("query parameters:", {"data": query})
+
     try:
         resp = requests.post(
             overpass_url,
@@ -451,12 +453,25 @@ def search_hotels(city: str, limit: int = 5) -> str:
         resp.raise_for_status()
         data = resp.json()
         elements = data.get("elements", [])
-        
+
         if not elements:
             return f"No hotels found in {city} (within {radius/1000:.1f}km radius)."
-        
-        hotels = []
-        for elem in elements[:limit]:
+
+        def _estimate_price(stars: int | None) -> tuple[float, str]:
+            """Return (midpoint_price_usd, display_range). Heuristic mapping from star rating.
+            If stars is None, use a generic mid-range fallback.
+            """
+            mapping = {
+                5: (325, "$250-$400"),
+                4: (240, "$180-$300"),
+                3: (160, "$120-$200"),
+                2: (100, "$80-$120"),
+                1: (65, "$50-$80"),
+            }
+            return mapping.get(stars, (140, "$100-$180"))
+
+        enriched = []
+        for elem in elements:
             tags = elem.get("tags", {})
             name = tags.get("name", "(unnamed hotel)")
             addr_parts = []
@@ -467,13 +482,218 @@ def search_hotels(city: str, limit: int = 5) -> str:
             if "addr:city" in tags:
                 addr_parts.append(tags["addr:city"])
             address = ", ".join(addr_parts) if addr_parts else "(address unavailable)"
-            hotels.append(f"- {name}: {address}")
-        
-        return f"Hotels in {city}:\\n" + "\\n".join(hotels)
+            # Star rating if present (as string) -> int
+            raw_stars = tags.get("stars")
+            try:
+                stars_int = int(raw_stars) if raw_stars is not None else None
+            except ValueError:
+                stars_int = None
+            mid_price, price_range = _estimate_price(stars_int)
+            enriched.append({
+                "name": name,
+                "address": address,
+                "stars": stars_int,
+                "mid_price": mid_price,
+                "price_range": price_range,
+            })
+
+        # Sort by estimated midpoint price ascending (cheapest first)
+        enriched.sort(key=lambda h: h["mid_price"])
+        top = enriched[:limit]
+
+        lines = []
+        for h in top:
+            stars_display = f"{h['stars']}★" if h['stars'] else "(unrated)"
+            lines.append(
+                f"- {h['name']} | {stars_display} | {h['address']} | Est. price: {h['price_range']}"
+            )
+
+        disclaimer = (
+            "Price ranges are heuristic estimates derived from OSM star ratings; "
+            "they are not real-time prices. For actual rates, consult a booking provider."
+        )
+        return f"Top {len(top)} hotels (cheapest first) in {city}:\n" + "\n".join(lines) + "\n" + disclaimer
     except SSLError as e:
         return (f"Hotel search SSL error for {city}. Suggestions: upgrade certifi, set REQUESTS_CA_BUNDLE. Raw: {e}")
     except Exception as e:
         return f"Hotel search error for {city}: {e}"
+
+
+# ==== Real-time hotel pricing via Amadeus Self-Service API ====
+# Requires AMADEUS_API_KEY (client id) and AMADEUS_API_SECRET (client secret) in env.
+# Falls back to heuristic OSM hotel search if credentials missing or API errors.
+
+AMADEUS_API_KEY = os.getenv("AMADEUS_API_KEY")
+AMADEUS_API_SECRET = os.getenv("AMADEUS_API_SECRET")
+_AMADEUS_TOKEN: str | None = None
+_AMADEUS_TOKEN_EXP: float = 0.0
+
+def _amadeus_get_token() -> str | None:
+    import time
+    global _AMADEUS_TOKEN, _AMADEUS_TOKEN_EXP
+
+    #print("[amadeus] Fetching access token...")
+    if not (AMADEUS_API_KEY and AMADEUS_API_SECRET):
+        print("[amadeus] Missing API credentials.")
+        return None
+    # Reuse token if still valid (leave 60s safety margin)
+    if _AMADEUS_TOKEN and time.time() < _AMADEUS_TOKEN_EXP - 60:
+        return _AMADEUS_TOKEN
+    try:
+        resp = requests.post(
+            "https://test.api.amadeus.com/v1/security/oauth2/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": AMADEUS_API_KEY,
+                "client_secret": AMADEUS_API_SECRET,
+            },
+            timeout=20,
+            verify=certifi.where(),
+        )
+        resp.raise_for_status()
+        j = resp.json() or {}
+        _AMADEUS_TOKEN = j.get("access_token")
+        expires_in = j.get("expires_in", 1800)
+        import time as _t
+        _AMADEUS_TOKEN_EXP = _t.time() + expires_in
+        return _AMADEUS_TOKEN
+    except Exception as e:
+        print(f"[amadeus] token error: {e}")
+        return None
+
+def search_hotels_realtime(city: str, limit: int = 5) -> str:
+    """Search hotels with real-time pricing using Amadeus workflow:
+
+    1. List hotels by geocode (v1/reference-data/locations/hotels/by-geocode) to obtain hotelIds.
+    2. Fetch offers/prices for those hotelIds (v3/shopping/hotel-offers).
+    3. Return cheapest 'limit' hotels with total price.
+
+    Falls back to heuristic OSM search if any step fails or no offers found.
+    Dates are derived from environment overrides: AMADEUS_CHECKIN_OFFSET_DAYS and AMADEUS_STAY_NIGHTS.
+    """
+    token = _amadeus_get_token()
+    if not token:
+        return "(Real-time pricing unavailable: missing or invalid Amadeus credentials)\n" + search_hotels(city, limit)
+
+    loc = geocode_city(city)
+    if not loc:
+        return f"Could not geocode city '{city}'."
+    lat, lon = loc
+
+    # Determine check-in/check-out dates
+    from datetime import date, timedelta
+    try:
+        offset_days = int(os.getenv("AMADEUS_CHECKIN_OFFSET_DAYS", "7"))
+    except ValueError:
+        offset_days = 7
+    try:
+        stay_nights = int(os.getenv("AMADEUS_STAY_NIGHTS", "1"))
+    except ValueError:
+        stay_nights = 1
+    if stay_nights < 1:
+        stay_nights = 1
+    check_in = date.today() + timedelta(days=offset_days)
+    check_out = check_in + timedelta(days=stay_nights)
+    check_in_str = check_in.isoformat()
+    check_out_str = check_out.isoformat()
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Step 1: list hotels by geocode
+    list_params = {
+        "latitude": lat,
+        "longitude": lon,
+        "radius": 5,
+        "radiusUnit": "MILE",
+    }
+    try:
+        list_resp = requests.get(
+            "https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-geocode",
+            params=list_params,
+            headers=headers,
+            timeout=20,
+            verify=certifi.where(),
+        )
+        if not list_resp.ok:
+            return f"(Amadeus hotel listing error {list_resp.status_code})\n" + search_hotels(city, limit)
+        list_json = list_resp.json() or {}
+        hotels_data = list_json.get("data", [])
+        print(f"[amadeus] Found {len(hotels_data)} hotels in listing.")
+        hotel_ids = [h.get("hotelId") for h in hotels_data if h.get("hotelId")]
+        if not hotel_ids:
+            return "(No hotel IDs from Amadeus geocode; fallback)\n" + search_hotels(city, limit)
+        # Limit number of hotelIds to avoid very large requests
+        hotel_ids = hotel_ids[:min(len(hotel_ids), 20)]
+    except Exception as e:
+        return f"(Amadeus listing exception: {e})\n" + search_hotels(city, limit)
+
+    # Step 2: fetch offers for collected hotel IDs (batch request)
+    offers_params = {
+        "hotelIds": ",".join(hotel_ids),
+        "adults": 1,
+        "checkInDate": check_in_str,
+        "checkOutDate": check_out_str,
+        "roomQuantity": 1,
+        "paymentPolicy": "NONE",
+        "bestRateOnly": "true",
+    }
+    try:
+        offers_resp = requests.get(
+            "https://test.api.amadeus.com/v3/shopping/hotel-offers",
+            params=offers_params,
+            headers=headers,
+            timeout=25,
+            verify=certifi.where(),
+        )
+        print("offers_resp status:", offers_resp.status_code)
+        print("offers_resp text:", offers_resp.text)
+        if not offers_resp.ok:
+            return f"(Offers request error {offers_resp.status_code})\n" + search_hotels(city, limit)
+        offers_json = offers_resp.json() or {}
+        data_arr = offers_json.get("data", [])
+        priced_hotels: list[dict] = []
+        for entry in data_arr:
+            hotel_info = entry.get("hotel", {})
+            name = hotel_info.get("name", "(unnamed)")
+            addr_lines = hotel_info.get("address", {}).get("lines", [])
+            address = ", ".join(addr_lines) if addr_lines else "(address unavailable)"
+            offers = entry.get("offers", [])
+            cheapest_price = None
+            currency = "USD"
+            for off in offers:
+                price_obj = off.get("price", {})
+                total = price_obj.get("total")
+                currency = price_obj.get("currency", currency)
+                try:
+                    val = float(total) if total is not None else None
+                except ValueError:
+                    val = None
+                if val is not None and (cheapest_price is None or val < cheapest_price):
+                    cheapest_price = val
+            if cheapest_price is not None:
+                priced_hotels.append({
+                    "name": name,
+                    "address": address,
+                    "price": cheapest_price,
+                    "currency": currency,
+                })
+        if not priced_hotels:
+            return "(No priced offers; fallback heuristic list)\n" + search_hotels(city, limit)
+        priced_hotels.sort(key=lambda h: h["price"])  # cheapest first
+        top = priced_hotels[:limit]
+        lines = [f"- {h['name']} | {h['address']} | {h['price']:.2f} {h['currency']}" for h in top]
+        disclaimer = (
+            "Prices from Amadeus Sandbox for dates "
+            f"{check_in_str} to {check_out_str}; may not reflect live market. Verify before booking."
+        )
+        return (
+            f"Real-time hotel prices (Amadeus) in {city} (cheapest first):\n" +
+            "\n".join(lines) + "\n" + disclaimer
+        )
+    except SSLError as e:
+        return f"(SSL error contacting Amadeus offers: {e})\n" + search_hotels(city, limit)
+    except Exception as e:
+        return f"(Amadeus offers exception: {e})\n" + search_hotels(city, limit)
 
 
 # Test function to run the agent
@@ -484,7 +704,12 @@ if __name__ == "__main__":
     #print(result)
 
     
-    print("\n\n=== Test 2: Get Air Quality for San Francisco (Open-Meteo) ===")
-    om_result = fetch_air_quality_openmeteo("San Francisco")
+    #print("\n\n=== Test 2: Get Air Quality for San Francisco (Open-Meteo) ===")
+    #om_result = fetch_air_quality_openmeteo("San Francisco")
+    #print(om_result)
+
+    print("\n\n=== Test 3: Search Hotels in London ===")
+    om_result = search_hotels_realtime("London", limit=5)
     print(om_result)
+
     #main()

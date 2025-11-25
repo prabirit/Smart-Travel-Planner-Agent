@@ -32,6 +32,7 @@ try:  # package context
         fetch_air_quality_openmeteo,
         geocode_city,
         search_hotels,
+        search_hotels_realtime,
     )
 except Exception:  # script / non-package execution
     try:
@@ -42,6 +43,7 @@ except Exception:  # script / non-package execution
             fetch_air_quality_openmeteo,
             geocode_city,
             search_hotels,
+            search_hotels_realtime,
         )
     except Exception as import_err:
         raise RuntimeError(
@@ -168,6 +170,9 @@ def transport_emissions_tool(mode: str, distance_km: float):
     return estimate_transport_emissions(mode, distance_km)
 
 def hotel_search_tool(city: str, limit: int = 5):
+    # Prefer real-time pricing if Amadeus credentials available
+    if os.getenv("AMADEUS_API_KEY") and os.getenv("AMADEUS_API_SECRET"):
+        return search_hotels_realtime(city, limit)
     return search_hotels(city, limit)
 
 
