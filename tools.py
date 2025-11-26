@@ -855,6 +855,107 @@ def search_flights(origin: str, destination: str, departure_date: str | None = N
     except Exception as e:
         return f"(Flight search exception: {e})"
 
+# MCP Restaurant Tool - to call Google Places API
+def restaurant_search(location: str, cuisine: str | None = None, price_level: int | None = None, 
+                          min_rating: float | None = None, limit: int = 5) -> str:
+    """Search for restaurants using Google Places API directly.
+    
+    Args:
+        location: City or location to search (e.g., 'San Francisco, CA')
+        cuisine: Type of cuisine (e.g., 'italian', 'chinese', 'vegetarian')
+        price_level: Price filter (1=cheap, 2=moderate, 3=expensive, 4=very expensive)
+        min_rating: Minimum rating filter (1.0-5.0)
+        limit: Maximum number of results (default: 5)
+    
+    Returns:
+        Restaurant recommendations with ratings, prices, and addresses
+    """
+    try:
+        # Import the helper functions from restaurant_server
+        # This avoids MCP event loop issues by calling the API directly
+        api_key = os.getenv("GOOGLE_PLACES_API_KEY", "")
+        
+        if not api_key:
+            return "Error: GOOGLE_PLACES_API_KEY not configured. Please add it to your .env file."
+        
+        # Geocode location using Nominatim (free, no API key required)
+        coords = geocode_city(location)
+        if not coords:
+            return f"Error: Could not geocode location '{location}'. Please provide a valid city or address."
+        
+        lat, lng = coords  # geocode_city returns (lat, lon) tuple
+        
+        # Search restaurants
+        places_url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+        keyword = cuisine if cuisine else "restaurant"
+        
+        search_params = {
+            "location": f"{lat},{lng}",
+            "radius": 5000,  # 5km
+            "type": "restaurant",
+            "keyword": keyword,
+            "key": api_key
+        }
+        
+        if price_level:
+            search_params["maxprice"] = price_level
+            search_params["minprice"] = price_level
+        
+        response = requests.get(places_url, params=search_params, timeout=10, verify=certifi.where())
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("status") != "OK":
+            error_msg = data.get("error_message", "Unknown error")
+            if data.get("status") == "REQUEST_DENIED":
+                return (
+                    f"Error: Google Places API is not enabled for this API key.\n\n"
+                    f"To enable it:\n"
+                    f"1. Go to https://console.cloud.google.com/apis/library\n"
+                    f"2. Search for 'Places API'\n"
+                    f"3. Click 'Enable' on both:\n"
+                    f"   - Places API (legacy)\n"
+                    f"   - Geocoding API\n"
+                    f"4. Wait a few minutes for propagation\n\n"
+                    f"API Response: {error_msg}"
+                )
+            return f"No restaurants found in {location}. Status: {data.get('status')}, Error: {error_msg}"
+        
+        results = data.get("results", [])
+        
+        # Filter by rating
+        if min_rating:
+            results = [r for r in results if r.get("rating", 0) >= min_rating]
+        
+        # Sort by rating
+        results.sort(key=lambda x: x.get("rating", 0), reverse=True)
+        
+        # Format results
+        if not results:
+            return f"No restaurants found in {location} matching your criteria."
+        
+        response_lines = [f"Top {min(len(results), limit)} restaurants in {location}:\n"]
+        
+        for i, restaurant in enumerate(results[:limit], 1):
+            price = "💰" * (restaurant.get("price_level") or 1)
+            rating = restaurant.get("rating", "N/A")
+            reviews = restaurant.get("user_ratings_total", 0)
+            status = "🟢 Open" if restaurant.get("opening_hours", {}).get("open_now") else "🔴 Closed"
+            
+            response_lines.append(
+                f"{i}. **{restaurant['name']}**\n"
+                f"   Rating: ⭐ {rating}/5.0 ({reviews} reviews)\n"
+                f"   Price: {price}\n"
+                f"   Status: {status}\n"
+                f"   Address: {restaurant.get('vicinity')}\n"
+                f"   Place ID: {restaurant['place_id']}\n"
+            )
+        
+        return '\n'.join(response_lines)
+        
+    except Exception as e:
+        return f"Error searching restaurants: {e}"
+
 
 # Test function to run the agent
 if __name__ == "__main__":
@@ -872,7 +973,12 @@ if __name__ == "__main__":
     #om_result = search_hotels_realtime("London", limit=5)
     #print(om_result)
 
-    print("\n\n=== Test 4: Search Flights from San Francisco to Las Vegas ===")
-    om_result = search_flights("San Francisco", "Las Vegas", "2025-12-01", limit=5)
+    #print("\n\n=== Test 4: Search Flights from San Francisco to Las Vegas ===")
+    #om_result = search_flights("San Francisco", "Las Vegas", "2025-12-01", limit=5)
+    #print(om_result)
+
+
+    #print("\n\n=== Test 4: Search Flights from San Francisco to Las Vegas ===")
+    om_result = restaurant_search("Las Vegas, NV", cuisine="mexican", price_level=2, min_rating=3.0, limit=5)
     print(om_result)
     #main()

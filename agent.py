@@ -11,6 +11,14 @@ from datetime import datetime
 import pytz
 from requests.exceptions import RequestException
 import certifi
+import asyncio
+import json
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 """Agent module: provides root sustainability agent and itinerary planning.
 
@@ -34,6 +42,7 @@ try:  # package context
         search_hotels,
         search_hotels_realtime,
         search_flights,
+        restaurant_search
     )
 except Exception:  # script / non-package execution
     try:
@@ -46,6 +55,7 @@ except Exception:  # script / non-package execution
             search_hotels,
             search_hotels_realtime,
             search_flights,
+            restaurant_search
         )
     except Exception as import_err:
         raise RuntimeError(
@@ -181,6 +191,11 @@ def flight_search_tool(origin: str, destination: str, departure_date: str | None
     return search_flights(origin, destination, departure_date, limit)
 
 
+
+def restaurant_search_tool(destination: str, cuisine: str | None = None, price_level: int | None = None, 
+    min_rating: float | None = None, limit: int = 5):
+    return restaurant_search(destination, cuisine, price_level, min_rating, limit)
+
 # New: itinerary tool wrapping ItineraryAgent
 def itinerary_tool(origin: str, destination: str, mode: str = "auto"):
     ia = ItineraryAgent()
@@ -205,16 +220,18 @@ itinerary_sub_agent = Agent(
 root_agent = Agent(
     model="gemini-2.5-flash",
     name="starter_sustainability_agent",
-    description="Answers sustainability questions: weather, air quality, transport emissions, current time, hotel search, flight search, and itinerary planning.",
+    description="Answers sustainability questions: weather, air quality, transport emissions, current time, hotel search, flight search, restaurant recommendations, and itinerary planning.",
     instruction=(
         "You help with: 1) weather -> weather_tool(city); 2) air quality -> air_quality_tool(city); "
         "3) transport emissions -> transport_emissions_tool(mode, distance_km); 4) current time -> timer_tool(city); "
         "5) itinerary planning -> itinerary_tool(origin, destination, mode); 6) hotel search -> hotel_search_tool(city, limit); "
-        "7) flight search -> flight_search_tool(origin, destination, departure_date, limit). "
+        "7) flight search -> flight_search_tool(origin, destination, departure_date, limit); "
+        "8) restaurant search -> restaurant_search_tool(location, cuisine, price_level, min_rating, limit). "
         "If a user asks for hotels or lodging, use hotel_search_tool. If a user asks for flights, use flight_search_tool. "
+        "If a user asks for restaurants or dining recommendations, use restaurant_search_tool. "
         "If a user asks for a trip plan, prefer itinerary_tool which combines multiple tools."
     ),
-    tools=[weather_tool, air_quality_tool, transport_emissions_tool, timer_tool, itinerary_tool, hotel_search_tool, flight_search_tool],
+    tools=[weather_tool, air_quality_tool, transport_emissions_tool, timer_tool, itinerary_tool, hotel_search_tool, flight_search_tool, restaurant_search_tool],
     sub_agents=[itinerary_sub_agent],
 )
 
@@ -253,6 +270,7 @@ def run_query(prompt: str) -> str:
     air = air_quality_tool(city)
     time_info = timer_tool(city)
     emissions = transport_emissions_tool(mode, distance_km)
+    restaurants = restaurant_search_tool(city, cuisine=None, price_level=None, min_rating=None, limit=5)
 
     return (
         f"City: {city}\n"
@@ -260,6 +278,7 @@ def run_query(prompt: str) -> str:
         f"{air}\n"
         f"{time_info}\n"
         f"{emissions}\n"
+        f"{restaurants}\n"
         f"(Mode inferred: {mode})"
     )
 
@@ -280,6 +299,7 @@ if __name__ == "__main__":
             f"What's the weather and air quality in {args.destination}? "
             f"What's the estimated CO2 emissions for a 50 km car trip? "
             f"Also, what is the current time there?"
+            f"Can you recommend some restaurants in {args.destination}?"
         )
         response_text = run_query(test_prompt)
-        print("Agent response:\n" + response_text)
+        print("Agent response>>>:\n" + response_text)
