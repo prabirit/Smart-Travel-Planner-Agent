@@ -17,6 +17,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from dotenv import load_dotenv
 
+
+from google.adk.agents import LlmAgent
+from google.adk.tools import AgentTool
+
 # Load environment variables
 load_dotenv()
 
@@ -215,6 +219,17 @@ itinerary_sub_agent = Agent(
     sub_agents=[],
 )
 
+#itinerary agent
+itinerary_agent = LlmAgent(
+    model="gemini-2.5-flash",
+    name="itinerary_planner_agent",
+    description="Generates sustainable multi-day travel itineraries between two cities.",
+    instruction=(
+        "When asked to plan a trip, call itinerary_tool(origin, destination, mode). "
+        "Offer low-carbon transport, daily breakdown, sustainability tips, and emissions reduction suggestions."
+    ),
+    tools=[itinerary_tool],
+)
 
 # Create the root agent
 root_agent = Agent(
@@ -231,8 +246,9 @@ root_agent = Agent(
         "If a user asks for restaurants or dining recommendations, use restaurant_search_tool. "
         "If a user asks for a trip plan, prefer itinerary_tool which combines multiple tools."
     ),
-    tools=[weather_tool, air_quality_tool, transport_emissions_tool, timer_tool, itinerary_tool, hotel_search_tool, flight_search_tool, restaurant_search_tool],
-    sub_agents=[itinerary_sub_agent],
+    tools=[weather_tool, air_quality_tool, transport_emissions_tool, timer_tool, itinerary_tool, hotel_search_tool, flight_search_tool, restaurant_search_tool,
+           AgentTool(agent=itinerary_agent),],
+    #sub_agents=[itinerary_sub_agent],
 )
 
 
