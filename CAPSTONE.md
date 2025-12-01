@@ -133,4 +133,13 @@ python3 -m pytest test_tools.py -v
 - Google Maps Platform (Directions, Places): https://developers.google.com/maps
 - Google Generative AI: https://ai.google.dev
 
-# For more details refer to CAPSTONE.md
+## agent prompts
+What can you help me with?
+Create a Full itinerary from San Francisco to London for January 5th 2026
+I would like to explore options for flights this trip?
+What about hotels for this trip?
+Plan a trip from San Francisco to Las Vegas for December 10th 2025 with some hotel options
+What about some restaurants?
+whts the current time and weather in Las Vegas
+What was my last trip?
+And previous to this trip?

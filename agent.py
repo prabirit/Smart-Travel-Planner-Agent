@@ -23,10 +23,16 @@ from google.adk.tools import AgentTool
 from google.adk.models.google_llm import Gemini
 from google.genai import types
 from google.adk.sessions import InMemorySessionService
+from google.adk.runners import InMemoryRunner
 from google.adk.runners import Runner
 from google.adk.sessions import DatabaseSessionService
 
-print("✅ ADK components imported successfully.")
+
+from google.adk.plugins.logging_plugin import (
+    LoggingPlugin,
+) # Example plugin for logging
+
+print("ADK components imported successfully.")
 
 # Load environment variables
 load_dotenv()
@@ -279,11 +285,21 @@ session_service = InMemorySessionService()
 #session_service = DatabaseSessionService(db_url=db_url)
 
 # Create the Runner
-runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
+seaaionRunner = Runner(agent=itinerary_agent, app_name=APP_NAME, session_service=session_service)
 
-print("✅ Upgraded to persistent sessions!")
-print(f"   - Database: my_smart_travel_agent_data.db")
-print(f"   - Sessions will survive restarts!")
+# Alternatively, use InMemoryRunner with plugins
+runner = InMemoryRunner(
+    agent=root_agent,
+    plugins=[
+        LoggingPlugin()
+    ],
+)
+
+print("Runner configured")
+
+#print("Upgraded to persistent sessions!")
+#print(f"   - Database: my_smart_travel_agent_data.db")
+#print(f"   - Sessions will survive restarts!")
 
 main_agent = root_agent
 
