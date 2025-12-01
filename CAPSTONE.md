@@ -53,6 +53,7 @@ Data flows:
 - Restaurants: Direct Google Places Nearby Search with cuisine/price/rating filters; Nominatim geocoding avoids key requirements.
 - Robust SSL verification (`certifi.where()`), helpful error messages (e.g., Places API enabling guidance).
 - Agent wrappers: `weather_tool`, `air_quality_tool`, `transport_emissions_tool`, `itinerary_tool`, `hotel_search_tool`, `flight_search_tool`, `restaurant_search_tool`.
+- Impelmented Session management using SessionService (The storage layer) and Runner (The orchestration layer)
 
 ## Data Sources and APIs
 - Amadeus: `v1/reference-data/locations/hotels/by-geocode`, `v3/shopping/hotel-offers`, `v1/reference-data/locations`, `v2/shopping/flight-offers`.
