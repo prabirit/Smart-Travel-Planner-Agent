@@ -1,107 +1,107 @@
 # Smart Travel Planner Agent - Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────────────────────┐
 │                          USER INTERFACE LAYER                                │
 │                                                                              │
-│   ┌──────────────────────────────────────────────────────────────────────┐ │
-│   │  CLI Interface / Google ADK Web UI / Agent Query Interface           │ │
-│   └──────────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────┘
+│   ┌──────────────────────────────────────────────────────────────────────┐   │
+│   │  CLI Interface / Google ADK Web UI / Agent Query Interface           │   │
+│   └──────────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────────────────────┐
 │                          AGENT ORCHESTRATION LAYER                           │
 │                                                                              │
-│   ┌──────────────────────────────────────────────────────────────────────┐ │
-│   │                    Root Sustainability Agent                         │ │
-│   │                  (Gemini 2.5 Flash Lite Model)                       │ │
-│   │                                                                      │ │
-│   │  • Route planning & coordination                                    │ │
-│   │  • Tool selection & invocation                                      │ │
-│   │  • Response synthesis                                               │ │
-│   │  • Session management (InMemory/Database)                           │ │
-│   └──────────────────────────────────────────────────────────────────────┘ │
+│   ┌──────────────────────────────────────────────────────────────────────┐   │
+│   │                    Root Sustainability Agent                         │   │
+│   │                  (Gemini 2.5 Flash Lite Model)                       │   │
+│   │                                                                      │   │
+│   │  • Route planning & coordination                                     │   │
+│   │  • Tool selection & invocation                                       │   │
+│   │  • Response synthesis                                                │   │
+│   │  • Session management (InMemory/Database)                            │   │
+│   └──────────────────────────────────────────────────────────────────────┘   │
 │                                      │                                       │
 │                                      ▼                                       │
-│   ┌──────────────────────────────────────────────────────────────────────┐ │
-│   │                    Itinerary Planning Agent Tool                     │ │
-│   │                    (Gemini 2.5 Flash Model)                          │ │
-│   │                                                                      │ │
-│   │  • Multi-day itinerary generation                                   │ │
-│   │  • Sustainability recommendations                                   │ │
-│   │  • Emissions reduction suggestions                                  │ │
-│   └──────────────────────────────────────────────────────────────────────┘ │
+│   ┌──────────────────────────────────────────────────────────────────────┐   │
+│   │                    Itinerary Planning Agent Tool                     │   │
+│   │                    (Gemini 2.5 Flash Model)                          │   │
+│   │                                                                      │   │
+│   │  • Multi-day itinerary generation                                    │   │
+│   │  • Sustainability recommendations                                    │   │
+│   │  • Emissions reduction suggestions                                   │   │
+│   └──────────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            TOOL LAYER                                       │
+│                                                                             │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                 │
+│  │ weather_tool   │  │  timer_tool    │  │air_quality_tool│                 │
+│  └────────────────┘  └────────────────┘  └────────────────┘                 │
+│                                                                             │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                 │
+│  │hotel_search    │  │flight_search   │  │restaurant_     │                 │ 
+│  │_tool           │  │_tool           │  │search_tool     │                 │
+│  └────────────────┘  └────────────────┘  └────────────────┘                 │
+│                                                                             │
+│  ┌────────────────┐  ┌────────────────────────────────────┐                 │
+│  │transport_      │  │    itinerary_tool                  │                 │
+│  │emissions_tool  │  │  (Wrapper for sub-agent)           │                 │
+│  └────────────────┘  └────────────────────────────────────┘                 │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            TOOL LAYER                                        │
-│                                                                              │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                │
-│  │ weather_tool   │  │  timer_tool    │  │air_quality_tool│                │
-│  └────────────────┘  └────────────────┘  └────────────────┘                │
-│                                                                              │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                │
-│  │hotel_search    │  │flight_search   │  │restaurant_     │                │
-│  │_tool           │  │_tool           │  │search_tool     │                │
-│  └────────────────┘  └────────────────┘  └────────────────┘                │
-│                                                                              │
-│  ┌────────────────┐  ┌────────────────────────────────────┐                │
-│  │transport_      │  │    itinerary_tool                  │                │
-│  │emissions_tool  │  │  (Wrapper for sub-agent)           │                │
-│  └────────────────┘  └────────────────────────────────────┘                │
+│                      EXTERNAL API INTEGRATION LAYER                         │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                    Weather & Air Quality APIs                        │   │
+│  │  • Open-Meteo API (primary - weather & air quality)                  │   │
+│  │  • OpenWeatherMap API (fallback - requires key)                      │   │
+│  │  • OpenAQ API (optional enhanced air quality)                        │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │ 
+│  │                    Location & Mapping APIs                           │   │
+│  │  • Nominatim/OpenStreetMap (free geocoding)                          │   │
+│  │  • Google Maps Directions API (route planning - optional)            │   │
+│  │  • Google Places API (restaurant search - requires key)              │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                    Travel Booking APIs                               │   │
+│  │  • Amadeus Self-Service API                                          │   │
+│  │    - Hotel search by geocode (v1/reference-data/locations/hotels)    │   │
+│  │    - Hotel pricing (v3/shopping/hotel-offers)                        │   │
+│  │    - Airport/city lookup (v1/reference-data/locations)               │   │
+│  │    - Flight search (v2/shopping/flight-offers)                       │   │
+│  │  • OpenStreetMap Overpass API (fallback hotel search)                │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                    LLM & AI Services                                 │   │
+│  │  • Google Generative AI (Gemini)                                     │   │
+│  │    - gemini-2.5-flash-lite (main agent)                              │   │
+│  │    - gemini-2.5-flash (itinerary sub-agent)                          │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      EXTERNAL API INTEGRATION LAYER                          │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                    Weather & Air Quality APIs                        │  │
-│  │  • Open-Meteo API (primary - weather & air quality)                 │  │
-│  │  • OpenWeatherMap API (fallback - requires key)                     │  │
-│  │  • OpenAQ API (optional enhanced air quality)                       │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                    Location & Mapping APIs                           │  │
-│  │  • Nominatim/OpenStreetMap (free geocoding)                         │  │
-│  │  • Google Maps Directions API (route planning - optional)           │  │
-│  │  • Google Places API (restaurant search - requires key)             │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                    Travel Booking APIs                               │  │
-│  │  • Amadeus Self-Service API                                         │  │
-│  │    - Hotel search by geocode (v1/reference-data/locations/hotels)   │  │
-│  │    - Hotel pricing (v3/shopping/hotel-offers)                       │  │
-│  │    - Airport/city lookup (v1/reference-data/locations)              │  │
-│  │    - Flight search (v2/shopping/flight-offers)                      │  │
-│  │  • OpenStreetMap Overpass API (fallback hotel search)               │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                    LLM & AI Services                                 │  │
-│  │  • Google Generative AI (Gemini)                                    │  │
-│  │    - gemini-2.5-flash-lite (main agent)                             │  │
-│  │    - gemini-2.5-flash (itinerary sub-agent)                         │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          DATA & UTILITIES LAYER                              │
-│                                                                              │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                │
-│  │emission_factors│  │Session Service │  │ Logging Plugin │                │
-│  │.csv (local DB) │  │(Memory/SQLite) │  │                │                │
-│  └────────────────┘  └────────────────┘  └────────────────┘                │
-│                                                                              │
-│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                │
-│  │ Retry Logic    │  │ SSL/TLS Config │  │ Response Cache │                │
-│  │ (HTTP Adapter) │  │ (Certifi)      │  │ (requests)     │                │
-│  └────────────────┘  └────────────────┘  └────────────────┘                │
+│                          DATA & UTILITIES LAYER                             │
+│                                                                             │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                 │
+│  │emission_factors│  │Session Service │  │ Logging Plugin │                 │
+│  │.csv (local DB) │  │(Memory/SQLite) │  │                │                 │
+│  └────────────────┘  └────────────────┘  └────────────────┘                 │
+│                                                                             │
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                 │
+│  │ Retry Logic    │  │ SSL/TLS Config │  │ Response Cache │                 │
+│  │ (HTTP Adapter) │  │ (Certifi)      │  │ (requests)     │                 │
+│  └────────────────┘  └────────────────┘  └────────────────┘                 │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
