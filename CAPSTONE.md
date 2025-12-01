@@ -27,6 +27,7 @@ Travel planning is fragmented across many services: flights, lodging, local cond
 - `requirements.txt`: Dependency manifest.
 - `README.md`: User documentation, setup, and usage.
 - `test_tools.py`: Unit tests for weather, air quality, emissions, time, and restaurant features.
+- Refer to architecture_diagram.md for more details
 
 Data flows:
 - Geocoding (Nominatim) → Weather/Air Quality → Emissions.
