@@ -20,6 +20,13 @@ from dotenv import load_dotenv
 
 from google.adk.agents import LlmAgent
 from google.adk.tools import AgentTool
+from google.adk.models.google_llm import Gemini
+from google.genai import types
+from google.adk.sessions import InMemorySessionService
+from google.adk.runners import Runner
+from google.adk.sessions import DatabaseSessionService
+
+print("✅ ADK components imported successfully.")
 
 # Load environment variables
 load_dotenv()
@@ -231,9 +238,17 @@ itinerary_agent = LlmAgent(
     tools=[itinerary_tool],
 )
 
+#Configure Retry Options
+retry_config = types.HttpRetryOptions(
+    attempts=5,  # Maximum retry attempts
+    exp_base=7,  # Delay multiplier
+    initial_delay=1,
+    http_status_codes=[429, 500, 503, 504],  # Retry on these HTTP errors
+)
+
 # Create the root agent
 root_agent = Agent(
-    model="gemini-2.5-flash",
+    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
     name="starter_sustainability_agent",
     description="Answers sustainability questions: weather, air quality, transport emissions, current time, hotel search, flight search, restaurant recommendations, and itinerary planning.",
     instruction=(
@@ -251,7 +266,24 @@ root_agent = Agent(
     #sub_agents=[itinerary_sub_agent],
 )
 
+APP_NAME = "default"  # Application
+USER_ID = "default"  # User
+SESSION = "default"  # Session
 
+# Set up Session Management
+# InMemorySessionService stores conversations in RAM (temporary)
+session_service = InMemorySessionService()
+
+# SQLite database will be created automatically
+#db_url = "sqlite:///my_smart_travel_agent_data.db"  # Local SQLite file
+#session_service = DatabaseSessionService(db_url=db_url)
+
+# Create the Runner
+runner = Runner(agent=root_agent, app_name=APP_NAME, session_service=session_service)
+
+print("✅ Upgraded to persistent sessions!")
+print(f"   - Database: my_smart_travel_agent_data.db")
+print(f"   - Sessions will survive restarts!")
 
 main_agent = root_agent
 
