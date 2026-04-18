@@ -1,0 +1,189 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-travel-planner-agent"
+version = "1.0.0"
+description = "A sustainability-focused travel planning system with real-time flight and hotel pricing, weather data, emissions estimation, and restaurant recommendations"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Smart Travel Planner Team", email = "contact@smarttravelplanner.com"}
+]
+maintainers = [
+    {name = "Smart Travel Planner Team", email = "contact@smarttravelplanner.com"}
+]
+keywords = ["travel", "planning", "sustainability", "flights", "hotels", "weather", "emissions"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "google-genai>=1.0.0",
+    "requests>=2.32.0",
+    "pytz>=2024.1",
+    "certifi>=2024.8.0",
+    "python-dotenv>=1.0.1",
+    "googlemaps>=4.10.0",
+    "mcp>=1.2.0",
+    "httpx>=0.27.0",
+    "geopy>=2.4.0",
+    "pydantic>=2.5.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.7.0",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+    "pre-commit>=3.5.0",
+]
+test = [
+    "pytest>=8.2.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.21.0",
+    "coverage>=7.3.0",
+]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "myst-parser>=2.0.0",
+]
+weather = [
+    "openmeteo-requests>=1.1.0",
+    "pandas>=2.0.0",
+    "requests-cache>=1.0.0",
+    "retry-requests>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/smarttravelplanner/smart-travel-planner-agent"
+Documentation = "https://smart-travel-planner-agent.readthedocs.io/"
+Repository = "https://github.com/smarttravelplanner/smart-travel-planner-agent.git"
+"Bug Tracker" = "https://github.com/smarttravelplanner/smart-travel-planner-agent/issues"
+Changelog = "https://github.com/smarttravelplanner/smart-travel-planner-agent/blob/main/CHANGELOG.md"
+
+[project.scripts]
+smart-travel-planner = "src.smart_travel_planner.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+smart_travel_planner = ["data/*.csv", "data/*.json"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["smart_travel_planner"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "geopy.*",
+    "openmeteo_requests.*",
+    "pandas.*",
+    "requests_cache.*",
+    "retry_requests.*",
+    "google.*",
+    "amadeus.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "api: marks tests that require API keys",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "test_*"]
+skips = ["B101", "B601"]
